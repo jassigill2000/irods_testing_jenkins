@@ -15,6 +15,11 @@ def get_irods_packages_directory():
 
 def install_and_setup(database_type):
     irods_packages_directory = get_irods_packages_directory()
+
+    if irods_python_ci_utilities.get_distribution() == 'Centos linux':
+        irods_python_ci_utilities.subprocess_get_output(['rpm', '--rebuilddb'], check_rc=True)
+        irods_python_ci_utilities.subprocess_get_output(['yum', 'update'], check_rc=True)
+
     if os.path.exists(irods_packages_directory):
         icat_package_basename = filter(lambda x:'irods-server' in x, os.listdir(irods_packages_directory))[0]
         if 'irods-server' in icat_package_basename:
@@ -65,7 +70,14 @@ def checkout_git_repo_and_run_test_hook(git_repo, git_commitish, passthrough_arg
     output_directory = '/irods_test_env/{0}/{1}'.format(irods_python_ci_utilities.get_irods_platform_string(), plugin_name)
     plugin_build_dir = '/plugin_mount_dir/{0}'.format(plugin_name)
     python_script = 'irods_consortium_continuous_integration_test_hook.py'
-    return irods_python_ci_utilities.subprocess_get_output(['python', python_script, '--output_root_directory', output_directory, '--built_packages_root_directory', plugin_build_dir] + passthrough_arguments, cwd=git_checkout_dir, check_rc=True)
+    passthru_args = []
+    for args in passthrough_arguments.split(','):
+        arg1 = args.split(' ')
+        passthru_args = passthru_args + arg1
+    cmd = ['python', python_script, '--output_root_directory', output_directory, '--built_packages_root_directory', plugin_build_dir] + passthru_args
+    print(cmd)
+    #subprocess.check_call(['tail', '-f', '/dev/null'])
+    return irods_python_ci_utilities.subprocess_get_output(cmd, cwd=git_checkout_dir, check_rc=True)
 
 def run_test(test_name, output_root_directory):
     try:
@@ -85,7 +97,7 @@ def main():
     parser.add_argument('-t', '--test_name', default=None, help='test name or the plugin name')
     parser.add_argument('--plugin_repo', default='https://github.com/irods/irods_microservice_plugins_curl.git', help='plugin repo')
     parser.add_argument('--plugin_commitish', default='4-2-stable', help='plugin commitish')
-    parser.add_argument('--passthrough_arguments', default=[], nargs=argparse.REMAINDER)
+    parser.add_argument('--passthrough_arguments', type=str)
 
     args = parser.parse_args()
     install_and_setup(args.database_type)

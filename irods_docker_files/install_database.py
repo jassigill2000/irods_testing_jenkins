@@ -25,6 +25,7 @@ def install_database(database):
          
         elif distribution == 'Centos' or distribution == 'Centos linux':
              irods_python_ci_utilities.install_os_packages(['postgresql-server', 'postgresql-contrib'])
+             irods_python_ci_utilities.subprocess_get_output(['systemctl', 'enable', 'postgresql'], check_rc=True)
              irods_python_ci_utilities.subprocess_get_output(['su', '-', 'postgres', '-c' '"initdb"'], check_rc=True)
              irods_python_ci_utilities.subprocess_get_output(['su', '-', 'postgres', '-c', "pg_ctl -D /var/lib/pgsql/data -l logfile start"], check_rc=True)
              time.sleep(5)

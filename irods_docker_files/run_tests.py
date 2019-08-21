@@ -80,13 +80,9 @@ def main():
         plugin_repo_split = plugin_repo.split('/')
         plugin = plugin_repo_split[len(plugin_repo_split) - 1]
         plugin_name = plugin.split('.git')[0]
-        print('before if')
         if 'audit' in plugin_name:
-            print(plugin_name)
             if '--message_broker' in args.passthrough_arguments:
                 message_broker = args.passthrough_arguments.split(' ')[1]
-                print(message_broker)
-            #    message_broker = passthru_args_dict.get('--message_broker')
                 machine_name = args.platform_target + '-' + plugin_name + '-' + message_broker + '-' + args.build_id
         else:
             machine_name = args.platform_target + '-' + plugin_name + '-' + args.build_id

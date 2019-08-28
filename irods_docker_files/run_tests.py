@@ -30,11 +30,18 @@ def run_plugin_tests(image_name, irods_build_dir, plugin_build_dir, plugin_repo,
     results_mount = output_directory + ':/irods_test_env'
     plugin_mount = plugin_build_dir + ':/plugin_mount_dir'
     cgroup_mount = '/sys/fs/cgroup:/sys/fs/cgroup:ro'
+    key_mount = '/projects/irods/vsphere-testing/externals/amazon_web_services-CI.keypair:/projects/irods/vsphere-testing/externals/amazon_web_services-CI.keypair'
     if 'centos' in machine_name:
-        run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
+        if 's3' in machine_name:
+            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
+        else:
+            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
     else:
-        run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
-
+        if 's3' in machine_name:
+            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
+        else:
+            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
+    
     exec_cmd = ['docker exec {0} python install_and_test.py --test_plugin --database_type {1} --plugin_repo {2} --plugin_commitish {3} --passthrough_arguments "{4}"'.format(machine_name, database_type, plugin_repo, plugin_commitish, str(passthru_args))]
 
     stop_cmd = ['docker stop {0}'.format(machine_name)]
@@ -49,16 +56,17 @@ def main():
     parser = argparse.ArgumentParser(description='Run tests in os-containers')
     parser.add_argument('-p', '--platform_target', type=str, required=True)
     parser.add_argument('-b', '--build_id', type=str, required=True)
-    parser.add_argument('--irods_repo', type=str, required=True)
-    parser.add_argument('--irods_commitish', type=str, required=True)
+    parser.add_argument('--irods_repo', type=str, required=False)
+    parser.add_argument('--irods_commitish', type=str, required=False)
     parser.add_argument('--test_name_prefix', type=str, required=True)
     parser.add_argument('--irods_build_dir', type=str, required=True)
     parser.add_argument('--test_plugin', action='store_true', default=False)
+    parser.add_argument('--externals_build_dir', type=str, help='externals build directory')
     parser.add_argument('--plugin_build_dir', type=str, help='plugin build directory')
     parser.add_argument('--plugin_repo', help='plugin git repo')
     parser.add_argument('--plugin_commitish', help='plugin git commit sha')
     parser.add_argument('--database_type', default='postgres', help='database type', required=True)
-    parser.add_argument('--test_parallelism', default='4', help='The number of tests to run in parallel', required=True)
+    parser.add_argument('--test_parallelism', default='4', help='The number of tests to run in parallel', required=False)
     parser.add_argument('-o', '--output_directory', type=str, required=True)
     parser.add_argument('--passthrough_arguments', type=str)
     
@@ -70,7 +78,7 @@ def main():
         build_tag = get_build_tag(args.platform_target, 'irods-install', args.build_id)
     else:
         build_tag = get_build_tag(args.platform_target, 'plugin-install', args.build_id)
-        
+    
     install_irods(build_tag, base_image)
     test_name_prefix = args.platform_target + '-' + args.test_name_prefix
     if not args.test_plugin:

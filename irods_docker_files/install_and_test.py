@@ -18,7 +18,6 @@ def install_and_setup(database_type):
 
     if irods_python_ci_utilities.get_distribution() == 'Centos linux':
         irods_python_ci_utilities.subprocess_get_output(['rpm', '--rebuilddb'], check_rc=True)
-        irods_python_ci_utilities.subprocess_get_output(['yum', 'update'], check_rc=True)
 
     if os.path.exists(irods_packages_directory):
         icat_package_basename = filter(lambda x:'irods-server' in x, os.listdir(irods_packages_directory))[0]
@@ -76,7 +75,6 @@ def checkout_git_repo_and_run_test_hook(git_repo, git_commitish, passthrough_arg
         passthru_args = passthru_args + arg1
     cmd = ['python', python_script, '--output_root_directory', output_directory, '--built_packages_root_directory', plugin_build_dir] + passthru_args
     print(cmd)
-    #subprocess.check_call(['tail', '-f', '/dev/null'])
     return irods_python_ci_utilities.subprocess_get_output(cmd, cwd=git_checkout_dir, check_rc=True)
 
 def run_test(test_name, output_root_directory):
@@ -86,7 +84,6 @@ def run_test(test_name, output_root_directory):
         return rc
     finally:
         output_directory = '/irods_test_env/{0}/{1}'.format(irods_python_ci_utilities.get_irods_platform_string(),test_name)
-        #output_directory = output_root_directory + '/' + test_name
         irods_python_ci_utilities.gather_files_satisfying_predicate('/var/lib/irods/log', output_directory, lambda x: True)
         shutil.copy('/var/lib/irods/log/test_output.log', output_directory)
  

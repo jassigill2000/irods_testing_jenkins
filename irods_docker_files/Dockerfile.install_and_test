@@ -11,7 +11,6 @@ RUN pip install xmlrunner
 
 ADD install_database.py /
 RUN chmod u+x /install_database.py
-RUN python /install_database.py -d $DATABASE
 
 COPY install_externals.py /tmp/install_externals.py
 RUN cd tmp && python install_externals.py

@@ -8,12 +8,15 @@ import irods_python_ci_utilities
 import subprocess
 import shutil
 import time
-from subprocess import PIPE
+from subprocess import Popen, PIPE
 
 def get_irods_packages_directory():
     return '/irods_build/' + irods_python_ci_utilities.get_irods_platform_string()
 
 def install_and_setup(database_type):
+    install_database = 'python install_database.py --database_type {0}'.format(database_type)
+    subprocess.check_call(install_database, shell=True)
+
     irods_packages_directory = get_irods_packages_directory()
 
     if irods_python_ci_utilities.get_distribution() == 'Centos linux':
@@ -36,25 +39,6 @@ def install_database_plugin(irods_packages_directory, database_type):
     database_plugin_basename = filter(lambda x:package_filter in x, os.listdir(irods_packages_directory))[0]
     database_plugin = os.path.join(irods_packages_directory, database_plugin_basename)
     irods_python_ci_utilities.install_os_packages_from_files([database_plugin])
-
-def start_database(database_type):
-    distribution = irods_python_ci_utilities.get_distribution()
-    if database_type == 'postgres' and distribution == 'Ubuntu':
-        start_db = subprocess.Popen(['service', 'postgresql', 'start'])
-        start_db.wait()
-        status = 'no response'
-        while status == 'no response':
-            status_db = subprocess.Popen(['pg_isready'], stdout=PIPE, stderr=PIPE)
-            out, err = status_db.communicate()
-            if 'accepting connections' in out:
-                status = out
-    elif database_type == 'postgres' and distribution == 'Centos linux':
-        start_db = subprocess.Popen(['su', '-', 'postgres', '-c', "pg_ctl -D /var/lib/pgsql/data -l logfile start"])
-        start_db.wait()
-        rc = 1
-        while rc != 0:
-            rc, stdout, stderr = irods_python_ci_utilities.subprocess_get_output(['su', '-', 'postgres', '-c', "psql ICAT -c '\d'>/dev/null 2>&1"])
-            time.sleep(1)
 
 def setup_irods(database_type):
     if database_type == 'postgres':
@@ -98,7 +82,6 @@ def main():
 
     args = parser.parse_args()
     install_and_setup(args.database_type)
-    start_database(args.database_type)
     setup_irods(args.database_type)
     test_name = args.test_name
     

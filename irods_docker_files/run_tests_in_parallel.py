@@ -5,10 +5,13 @@ from subprocess import Popen, PIPE
 from multiprocessing import Pool
 from urlparse import urlparse
 
+
 import os
 import sys
+import time
 import argparse
 import json
+import subprocess
 import requests
 
 def download_list_of_core_tests(irods_repo, irods_commitish):
@@ -22,8 +25,14 @@ def download_list_of_core_tests(irods_repo, irods_commitish):
 
     return json.loads(response.text)
 
-def run_command_in_container(cmd):
-    return Popen(cmd, stdout=PIPE, stderr=PIPE).wait()
+def run_command_in_container(run_cmd, exec_cmd, stop_cmd):
+    run_proc = Popen(run_cmd, stdout=PIPE, stderr=PIPE)
+    _out, _err = run_proc.communicate()
+    exec_proc = Popen(exec_cmd, stdout=PIPE, stderr=PIPE)
+    _eout, _eerr = exec_proc.communicate()
+    _rc = exec_proc.returncode
+    stop_proc = Popen(stop_cmd, stdout=PIPE, stderr=PIPE)
+    return _rc
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,28 +48,55 @@ def main():
 
     build_mount = args.build_dir + ':/irods_build'
     results_mount = args.jenkins_output + ':/irods_test_env'
+    cgroup_mount = '/sys/fs/cgroup:/sys/fs/cgroup:ro'
+    run_mount = '/tmp/$(mktemp -d):/run'
 
     test_list = download_list_of_core_tests(args.irods_repo, args.irods_commitish)
     test_list.sort()
 
-    docker_run_list = []
+    docker_cmds_list = []
+    docker_stop_list = []
     for test in test_list:
         test_name = args.test_name_prefix + '_' + test
-        cmd = {'test_name': test,
-               'command': ['docker', 'run', '--rm', '--init',
+        if 'centos' in args.image_name:
+            docker_cmd = {'test_name': test,
+                           'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
                                             '--name', test_name,
                                             '-v', build_mount,
                                             '-v', results_mount,
-                                            args.image_name,
+                                            '-v', cgroup_mount,
+                                            '-v', run_mount,
+                                            '-h', 'icat.example.org',
+                                            args.image_name],
+                           'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
+                                            '--database_type', args.database_type, 
+                                            '--test_name', test],
+                           'stop_cmd': ['docker', 'stop', test_name]}
+        else:
+            docker_cmd = {'test_name': test,
+                           'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
+                                            '--name', test_name,
+                                            '-v', build_mount,
+                                            '-v', results_mount,
+                                            '-v', cgroup_mount,
+                                            '-h', 'icat.example.org',
+                                            args.image_name],
+                            'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
                                             '--database_type', args.database_type,
-                                            '-t', test]}
-        docker_run_list.append(cmd)
-    
-    print(docker_run_list)  
+                                            '--test_name', test],
+                            'stop_cmd': ['docker', 'stop', test_name]}
 
-    pool = Pool(processes=int(args.test_parallelism))
-    containers = [{'test_name': cmd['test_name'], 'proc': pool.apply_async(run_command_in_container, (cmd['command'],))} for cmd in docker_run_list]
+        docker_cmds_list.append(docker_cmd)
+    
+    print(docker_cmds_list)  
+
+    run_pool = Pool(processes=int(args.test_parallelism))
+
+    containers = [{'test_name': docker_cmd['test_name'], 'proc': run_pool.apply_async(run_command_in_container, (docker_cmd['run_cmd'], docker_cmd['exec_cmd'], docker_cmd['stop_cmd'],))} for docker_cmd in docker_cmds_list]
+
     container_error_codes = [{'test_name': c['test_name'], 'error_code': c['proc'].get()} for c in containers]
+
+    print(container_error_codes)
 
     failures = []
     for ec in container_error_codes:

@@ -40,6 +40,7 @@ def main():
     parser.add_argument('-j', '--jenkins_output', default='/jenkins_output', help='jenkins output directory on the host machine', required=True)
     parser.add_argument('-t', '--test_name_prefix', help='test name prefix')
     parser.add_argument('-b', '--build_dir',  help='irods build directory', required=True)
+    parser.add_argument('--externals_dir', help='externals build directory', default=None)
     parser.add_argument('-d', '--database_type', default='postgres', help='database type', required=True)
     parser.add_argument('--irods_repo', type=str, required=True)
     parser.add_argument('--irods_commitish', type=str, required=True)
@@ -50,41 +51,74 @@ def main():
     results_mount = args.jenkins_output + ':/irods_test_env'
     cgroup_mount = '/sys/fs/cgroup:/sys/fs/cgroup:ro'
     run_mount = '/tmp/$(mktemp -d):/run'
+    externals_mount = args.externals_dir + ':/irods_externals'
 
-    test_list = download_list_of_core_tests(args.irods_repo, args.irods_commitish)
-    test_list.sort()
+    #test_list = download_list_of_core_tests(args.irods_repo, args.irods_commitish)
+    #test_list.sort()
+    test_list = ['test_ils']
 
     docker_cmds_list = []
     docker_stop_list = []
     for test in test_list:
         test_name = args.test_name_prefix + '_' + test
         if 'centos' in args.image_name:
-            docker_cmd = {'test_name': test,
-                           'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
-                                            '--name', test_name,
-                                            '-v', build_mount,
-                                            '-v', results_mount,
-                                            '-v', cgroup_mount,
-                                            '-v', run_mount,
-                                            '-h', 'icat.example.org',
-                                            args.image_name],
-                           'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
-                                            '--database_type', args.database_type, 
-                                            '--test_name', test],
-                           'stop_cmd': ['docker', 'stop', test_name]}
+            if args.externals_dir is None or args.externals_dir == 'None':
+                docker_cmd = {'test_name': test,
+                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
+                                          '--name', test_name,
+                                          '-v', build_mount,
+                                          '-v', results_mount,
+                                          '-v', cgroup_mount,
+                                          '-v', run_mount,
+                                          '-h', 'icat.example.org',
+                                          args.image_name],
+                              'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
+                                           '--database_type', args.database_type,
+                                           '--test_name', test],
+                              'stop_cmd': ['docker', 'stop', test_name]}
+            else:
+                docker_cmd = {'test_name': test,
+                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
+                                          '--name', test_name,
+                                          '-v', build_mount,
+                                          '-v', results_mount,
+                                          '-v', cgroup_mount,
+                                          '-v', run_mount,
+                                          '-v', externals_mount,
+                                          '-h', 'icat.example.org',
+                                          args.image_name],
+                             'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
+                                          '--database_type', args.database_type,
+                                          '--test_name', test, '--install_externals'],
+                             'stop_cmd': ['docker', 'stop', test_name]}
         else:
-            docker_cmd = {'test_name': test,
-                           'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
+            if args.externals_dir is None or args.externals_dir == 'None':
+                docker_cmd = {'test_name': test,
+                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
                                             '--name', test_name,
                                             '-v', build_mount,
                                             '-v', results_mount,
                                             '-v', cgroup_mount,
                                             '-h', 'icat.example.org',
                                             args.image_name],
-                            'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
+                              'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
                                             '--database_type', args.database_type,
                                             '--test_name', test],
-                            'stop_cmd': ['docker', 'stop', test_name]}
+                              'stop_cmd': ['docker', 'stop', test_name]}
+            else:
+                docker_cmd = {'test_name': test,
+                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
+                                            '--name', test_name,
+                                            '-v', build_mount,
+                                            '-v', results_mount,
+                                            '-v', cgroup_mount,
+                                            '-v', externals_mount,
+                                            '-h', 'icat.example.org',
+                                            args.image_name],
+                              'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
+                                            '--database_type', args.database_type,
+                                            '--test_name', test, '--install_externals'],
+                              'stop_cmd': ['docker', 'stop', test_name]}
 
         docker_cmds_list.append(docker_cmd)
     

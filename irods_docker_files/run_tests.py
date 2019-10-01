@@ -21,8 +21,8 @@ def install_irods(build_tag, base_image):
     docker_cmd =  ['docker build -t {0} --build-arg base_image={1} -f Dockerfile.install_and_test .'.format(build_tag, base_image)]
     run_build = subprocess.check_call(docker_cmd, shell = True)
 
-def run_tests(image_name, irods_repo, irods_commitish, build_dir, output_directory, database_type, test_parallelism, test_name_prefix):
-    run_tests_cmd = ['python run_tests_in_parallel.py --image_name {0} --jenkins_output {1} --test_name_prefix {2} -b {3} --database_type {4} --irods_repo {5} --irods_commitish {6} --test_parallelism {7}'.format(image_name, output_directory, test_name_prefix, build_dir, database_type, irods_repo, irods_commitish, test_parallelism)]
+def run_tests(image_name, irods_repo, irods_commitish, build_dir, output_directory, database_type, test_parallelism, test_name_prefix, externals_dir):
+    run_tests_cmd = ['python run_tests_in_parallel.py --image_name {0} --jenkins_output {1} --test_name_prefix {2} -b {3} --database_type {4} --irods_repo {5} --irods_commitish {6} --test_parallelism {7} --externals_dir {8}'.format(image_name, output_directory, test_name_prefix, build_dir, database_type, irods_repo, irods_commitish, test_parallelism, externals_dir)]
     run_tests_p = subprocess.check_call(run_tests_cmd, shell=True)
 
 def run_plugin_tests(image_name, irods_build_dir, plugin_build_dir, plugin_repo, plugin_commitish, passthru_args, output_directory, database_type, machine_name):
@@ -31,6 +31,7 @@ def run_plugin_tests(image_name, irods_build_dir, plugin_build_dir, plugin_repo,
     plugin_mount = plugin_build_dir + ':/plugin_mount_dir'
     cgroup_mount = '/sys/fs/cgroup:/sys/fs/cgroup:ro'
     key_mount = '/projects/irods/vsphere-testing/externals/amazon_web_services-CI.keypair:/projects/irods/vsphere-testing/externals/amazon_web_services-CI.keypair'
+
     if 'centos' in machine_name:
         if 's3' in machine_name:
             run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
@@ -38,10 +39,10 @@ def run_plugin_tests(image_name, irods_build_dir, plugin_build_dir, plugin_repo,
             run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
     else:
         if 's3' in machine_name:
-            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
+            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, buildmount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
         else:
             run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
-    
+
     exec_cmd = ['docker exec {0} python install_and_test.py --test_plugin --database_type {1} --plugin_repo {2} --plugin_commitish {3} --passthrough_arguments "{4}"'.format(machine_name, database_type, plugin_repo, plugin_commitish, str(passthru_args))]
 
     stop_cmd = ['docker stop {0}'.format(machine_name)]
@@ -61,7 +62,7 @@ def main():
     parser.add_argument('--test_name_prefix', type=str, required=True)
     parser.add_argument('--irods_build_dir', type=str, required=True)
     parser.add_argument('--test_plugin', action='store_true', default=False)
-    parser.add_argument('--externals_build_dir', type=str, help='externals build directory')
+    parser.add_argument('--externals_dir', type=str, help='externals build directory', default=None)
     parser.add_argument('--plugin_build_dir', type=str, help='plugin build directory')
     parser.add_argument('--plugin_repo', help='plugin git repo')
     parser.add_argument('--plugin_commitish', help='plugin git commit sha')
@@ -82,7 +83,8 @@ def main():
     install_irods(build_tag, base_image)
     test_name_prefix = args.platform_target + '-' + args.test_name_prefix
     if not args.test_plugin:
-        run_tests(build_tag, args.irods_repo, args.irods_commitish, args.irods_build_dir, args.output_directory, args.database_type, args.test_parallelism, test_name_prefix)
+        print(args.externals_dir)
+        run_tests(build_tag, args.irods_repo, args.irods_commitish, args.irods_build_dir, args.output_directory, args.database_type, args.test_parallelism, test_name_prefix, args.externals_dir)
     else:
         plugin_repo = args.plugin_repo
         plugin_repo_split = plugin_repo.split('/')

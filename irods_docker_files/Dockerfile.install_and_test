@@ -12,8 +12,8 @@ RUN pip install xmlrunner
 ADD install_database.py /
 RUN chmod u+x /install_database.py
 
-COPY install_externals.py /tmp/install_externals.py
-RUN cd tmp && python install_externals.py
+ADD install_externals.py /
+RUN chmod u+x /install_externals.py
 
 RUN echo export IRODS_ENABLE_TEST_MODE="1" > /etc/profile.d/irods.sh
 RUN chmod 644 /etc/profile.d/irods.sh

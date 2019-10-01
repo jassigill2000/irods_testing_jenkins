@@ -26,7 +26,7 @@ def save_externals_build(image_name, output_directory, machine_name):
 
     run_image = subprocess.check_call(run_cmd, shell=True)
     save_build = subprocess.check_call(exec_cmd, shell=True)
-    #stop = subprocess.check_call(stop_cmd, shell=True)
+    stop = subprocess.check_call(stop_cmd, shell=True)
 
 def main():
     parser = argparse.ArgumentParser(description='Build irods in base os-containers')

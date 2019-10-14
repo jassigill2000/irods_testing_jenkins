@@ -41,6 +41,11 @@ def get_package_dependencies(package_name):
 
     return ','.join(externals_list)
 
+def get_munge_external():
+    munge_external = 'irods-externals-mungefs*'
+    return munge_external
+
+
 def install_externals_from_list(externals_list):
     install_externals_cmd = 'python install_externals.py --externals_root_directory {0} --externals_to_install {1}'.format(get_externals_directory(), externals_list)
     subprocess.check_call(install_externals_cmd, shell=True)
@@ -86,9 +91,11 @@ def install_and_setup(database_type, install_externals):
             server_package = os.path.join(irods_packages_directory, icat_package_basename)
             if install_externals:
                 externals_list = get_package_dependencies(server_package)
+                externals_list = externals_list + ',' + get_munge_external()
                 install_externals_from_list(externals_list)
             else:
                 install_irods_repository()
+                #need to install munge here too after munge in core dev
 
             runtime_package = server_package.replace('irods-server', 'irods-runtime')
             icommands_package = server_package.replace('irods-server', 'irods-icommands')
@@ -108,7 +115,7 @@ def setup_irods(database_type):
     if database_type == 'postgres':
         subprocess.check_call(['python /var/lib/irods/scripts/setup_irods.py < /var/lib/irods/packaging/localhost_setup_postgres.input'], shell=True)
 
-def checkout_git_repo_and_run_test_hook(git_repo, git_commitish, passthrough_arguments):
+def checkout_git_repo_and_run_test_hook(git_repo, git_commitish, passthrough_arguments, install_externals):
     if irods_python_ci_utilities.get_distribution() == 'Ubuntu':
         irods_python_ci_utilities.subprocess_get_output(['apt-get', 'update'], check_rc=True)
     _git_repo = git_repo.split('/')
@@ -116,11 +123,22 @@ def checkout_git_repo_and_run_test_hook(git_repo, git_commitish, passthrough_arg
     git_checkout_dir = irods_python_ci_utilities.git_clone(git_repo, git_commitish)
     output_directory = '/irods_test_env/{0}/{1}'.format(irods_python_ci_utilities.get_irods_platform_string(), plugin_name)
     plugin_build_dir = '/plugin_mount_dir/{0}'.format(plugin_name)
+    if install_externals:
+        plugin_basename = plugin_name + '*'
+        plugin_package = os.path.join(plugin_build_dir, plugin_basename)
+        externals_list = get_package_dependencies(plugin_package)
+        install_externals_from_list(externals_list)
+
     python_script = 'irods_consortium_continuous_integration_test_hook.py'
     passthru_args = []
-    for args in passthrough_arguments.split(','):
-        arg1 = args.split(' ')
-        passthru_args = passthru_args + arg1
+    if passthrough_arguments is not None:
+        for args in passthrough_arguments.split(','):
+            arg1 = args.split(' ')
+            passthru_args = passthru_args + arg1
+
+    if 'irods_capability_storage_tiering' in plugin_name:
+        passthru_args.extend(['--munge_path', 'export PATH=/opt/irods-externals/mungefs1.0.1-0/usr/bin:$PATH'])
+
     cmd = ['python', python_script, '--output_root_directory', output_directory, '--built_packages_root_directory', plugin_build_dir] + passthru_args
     print(cmd)
     return irods_python_ci_utilities.subprocess_get_output(cmd, cwd=git_checkout_dir, check_rc=True)
@@ -154,7 +172,7 @@ def main():
         rc = run_test(args.test_name, get_irods_packages_directory())
         sys.exit(rc)
     else:
-        rc, stdout, stderr = checkout_git_repo_and_run_test_hook(args.plugin_repo, args.plugin_commitish, args.passthrough_arguments)
+        rc, stdout, stderr = checkout_git_repo_and_run_test_hook(args.plugin_repo, args.plugin_commitish, args.passthrough_arguments, args.install_externals)
         sys.exit(rc)
         
 

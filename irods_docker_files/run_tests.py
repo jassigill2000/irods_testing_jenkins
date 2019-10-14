@@ -4,7 +4,9 @@ from __future__ import print_function
 
 import argparse
 import subprocess
+import sys
 from subprocess import Popen, PIPE
+from docker_cmd_builder import DockerCommandsBuilder
 
 def get_build_tag(base_os, stage, build_id):
     build_tag = base_os + '-' + stage + ':' + build_id
@@ -25,33 +27,73 @@ def run_tests(image_name, irods_repo, irods_commitish, build_dir, output_directo
     run_tests_cmd = ['python run_tests_in_parallel.py --image_name {0} --jenkins_output {1} --test_name_prefix {2} -b {3} --database_type {4} --irods_repo {5} --irods_commitish {6} --test_parallelism {7} --externals_dir {8}'.format(image_name, output_directory, test_name_prefix, build_dir, database_type, irods_repo, irods_commitish, test_parallelism, externals_dir)]
     run_tests_p = subprocess.check_call(run_tests_cmd, shell=True)
 
-def run_plugin_tests(image_name, irods_build_dir, plugin_build_dir, plugin_repo, plugin_commitish, passthru_args, output_directory, database_type, machine_name):
+def run_plugin_tests(image_name, irods_build_dir, plugin_build_dir, plugin_repo, plugin_commitish, passthru_args, output_directory, database_type, machine_name, externals_dir):
     build_mount = irods_build_dir + ':/irods_build'
     results_mount = output_directory + ':/irods_test_env'
     plugin_mount = plugin_build_dir + ':/plugin_mount_dir'
     cgroup_mount = '/sys/fs/cgroup:/sys/fs/cgroup:ro'
+    run_mount = '/tmp/$(mktemp -d):/run'
+    externals_mount = externals_dir + ':/irods_externals'
     key_mount = '/projects/irods/vsphere-testing/externals/amazon_web_services-CI.keypair:/projects/irods/vsphere-testing/externals/amazon_web_services-CI.keypair'
 
     if 'centos' in machine_name:
-        if 's3' in machine_name:
-            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
-        else:
-            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
+        centosCmdBuilder = DockerCommandsBuilder()
+        centosCmdBuilder.plugin_constructor(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, run_mount, externals_mount, image_name, 'install_and_test.py', database_type, plugin_repo, plugin_commitish, passthru_args)
+        
+        run_cmd = centosCmdBuilder.build_run_cmd()
+        exec_cmd = centosCmdBuilder.build_exec_cmd()
+        stop_cmd = centosCmdBuilder.build_stop_cmd()
+    elif 'ubuntu' in machine_name:
+        ubuntuCmdBuilder = DockerCommandsBuilder()
+        ubuntuCmdBuilder.plugin_constructor(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, None, externals_mount, image_name, 'install_and_test.py', database_type, plugin_repo, plugin_commitish, passthru_args)
+        
+        run_cmd = ubuntuCmdBuilder.build_run_cmd()
+        exec_cmd = ubuntuCmdBuilder.build_exec_cmd()
+        stop_cmd = ubuntuCmdBuilder.build_stop_cmd()
     else:
-        if 's3' in machine_name:
-            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, buildmount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
-        else:
-            run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
+        print('OS not supported')
 
-    exec_cmd = ['docker exec {0} python install_and_test.py --test_plugin --database_type {1} --plugin_repo {2} --plugin_commitish {3} --passthrough_arguments "{4}"'.format(machine_name, database_type, plugin_repo, plugin_commitish, str(passthru_args))]
 
-    stop_cmd = ['docker stop {0}'.format(machine_name)]
+#        if args.externals_dir is None or args.externals_dir == '':
+#            if 's3' in machine_name:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
+#            else:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, image_name)]
+#        else:
+#            if 's3' in machine_name:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -v {6} -h icat.example.org {7}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, externals_mount, image_name)]
+#            else:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, externals_mount, image_name)]
+#    else:
+#        if args.externals_dir is None or args.externals_dir == '':
+#            if 's3' in machine_name:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -h icat.example.org {6}'.format(machine_name, buildmount, plugin_mount, results_mount, cgroup_mount, key_mount, image_name)]
+#            else:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -h icat.example.org {5}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount,image_name)]
+#        else:
+#            if 's3' in machine_name:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v /tmp/$(mktemp -d):/run -v {5} -v {6} -h icat.example.org {7}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, key_mount, externals_mount, image_name)]
+#            else:
+#                run_cmd = ['docker run --privileged -d --rm --name {0} -v {1} -v {2} -v {3} -v {4} -v {5} -h icat.example.org {6}'.format(machine_name, build_mount, plugin_mount, results_mount, cgroup_mount, externals_mount, image_name)]
+#
+#    if args.externals_dir is None or args.externals_dir == '':
+#       exec_cmd = ['docker exec {0} python install_and_test.py --test_plugin --database_type {1} --plugin_repo {2} --plugin_commitish {3} --passthrough_arguments "{4}"'.format(machine_name, database_type, plugin_repo, plugin_commitish, str(passthru_args))]
+#    else:
+#        exec_cmd = ['docker exec {0} python install_and_test.py --test_plugin --database_type {1} --plugin_repo {2} --plugin_commitish {3} --passthrough_arguments "{4}"'.format(machine_name, database_type, plugin_repo, plugin_commitish, str(passthru_args))]
+        
+#    stop_cmd = ['docker stop {0}'.format(machine_name)]
 
     print(run_cmd)
-
-    run_image = subprocess.check_call(run_cmd, shell=True)
-    exec_tests = subprocess.check_call(exec_cmd, shell=True)
-    stop_container = subprocess.check_call(stop_cmd, shell=True)
+    print(exec_cmd)
+    print(stop_cmd)
+    run_image = Popen(run_cmd, stdout=PIPE, stderr=PIPE)
+    _out, _err = run_image.communicate()
+    exec_tests = Popen(exec_cmd, stdout=PIPE, stderr=PIPE)
+    _eout, _eerr = exec_tests.communicate()
+    _rc = exec_tests.returncode
+    #stop_container = Popen(stop_cmd, stdout=PIPE, stderr=PIPE)
+    print('return code --->>> ', _rc)
+    sys.exit(_rc)
 
 def main():
     parser = argparse.ArgumentParser(description='Run tests in os-containers')
@@ -62,7 +104,7 @@ def main():
     parser.add_argument('--test_name_prefix', type=str, required=True)
     parser.add_argument('--irods_build_dir', type=str, required=True)
     parser.add_argument('--test_plugin', action='store_true', default=False)
-    parser.add_argument('--externals_dir', type=str, help='externals build directory', default=None)
+    parser.add_argument('--externals_dir', type=str, help='externals build directory')
     parser.add_argument('--plugin_build_dir', type=str, help='plugin build directory')
     parser.add_argument('--plugin_repo', help='plugin git repo')
     parser.add_argument('--plugin_commitish', help='plugin git commit sha')
@@ -97,7 +139,7 @@ def main():
         else:
             machine_name = args.platform_target + '-' + plugin_name + '-' + args.build_id
 
-        run_plugin_tests(build_tag, args.irods_build_dir, args.plugin_build_dir, args.plugin_repo, args.plugin_commitish, args.passthrough_arguments, args.output_directory, args.database_type, machine_name)
+        run_plugin_tests(build_tag, args.irods_build_dir, args.plugin_build_dir, args.plugin_repo, args.plugin_commitish, args.passthrough_arguments, args.output_directory, args.database_type, machine_name, args.externals_dir)
 
 if __name__ == '__main__':
     main()

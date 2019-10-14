@@ -4,7 +4,7 @@ from __future__ import print_function
 from subprocess import Popen, PIPE
 from multiprocessing import Pool
 from urlparse import urlparse
-
+from docker_cmd_builder import DockerCommandsBuilder
 
 import os
 import sys
@@ -53,72 +53,39 @@ def main():
     run_mount = '/tmp/$(mktemp -d):/run'
     externals_mount = args.externals_dir + ':/irods_externals'
 
-    #test_list = download_list_of_core_tests(args.irods_repo, args.irods_commitish)
-    #test_list.sort()
-    test_list = ['test_ils']
+    test_list = download_list_of_core_tests(args.irods_repo, args.irods_commitish)
+    test_list.sort()
 
     docker_cmds_list = []
     docker_stop_list = []
+
     for test in test_list:
         test_name = args.test_name_prefix + '_' + test
         if 'centos' in args.image_name:
-            if args.externals_dir is None or args.externals_dir == 'None':
-                docker_cmd = {'test_name': test,
-                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
-                                          '--name', test_name,
-                                          '-v', build_mount,
-                                          '-v', results_mount,
-                                          '-v', cgroup_mount,
-                                          '-v', run_mount,
-                                          '-h', 'icat.example.org',
-                                          args.image_name],
-                              'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
-                                           '--database_type', args.database_type,
-                                           '--test_name', test],
-                              'stop_cmd': ['docker', 'stop', test_name]}
-            else:
-                docker_cmd = {'test_name': test,
-                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
-                                          '--name', test_name,
-                                          '-v', build_mount,
-                                          '-v', results_mount,
-                                          '-v', cgroup_mount,
-                                          '-v', run_mount,
-                                          '-v', externals_mount,
-                                          '-h', 'icat.example.org',
-                                          args.image_name],
-                             'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
-                                          '--database_type', args.database_type,
-                                          '--test_name', test, '--install_externals'],
-                             'stop_cmd': ['docker', 'stop', test_name]}
+            centosCmdBuilder = DockerCommandsBuilder()
+            centosCmdBuilder.core_constructor(test_name, build_mount, results_mount, cgroup_mount, run_mount, externals_mount, args.image_name, 'install_and_test.py', args.database_type, test)
+            run_cmd = centosCmdBuilder.build_run_cmd()
+            exec_cmd = centosCmdBuilder.build_exec_cmd()
+            stop_cmd = centosCmdBuilder.build_stop_cmd()
+            docker_cmd = {'test_name': test,
+                          'run_cmd': run_cmd,
+                          'exec_cmd': exec_cmd,
+                          'stop_cmd': stop_cmd
+                         }
+        elif 'ubuntu' in args.image_name:
+            ubuntuCmdBuilder = DockerCommandsBuilder()
+            ubuntuCmdBuilder.core_constructor(test_name, build_mount, results_mount, cgroup_mount, None, externals_mount, args.image_name, 'install_and_test.py', args.database_type, test)
+            
+            run_cmd = ubuntuCmdBuilder.build_run_cmd()
+            exec_cmd = ubuntuCmdBuilder.build_exec_cmd()
+            stop_cmd = ubuntuCmdBuilder.build_stop_cmd()
+            docker_cmd = {'test_name': test,
+                          'run_cmd': run_cmd,
+                          'exec_cmd': exec_cmd,
+                          'stop_cmd': stop_cmd
+                         }
         else:
-            if args.externals_dir is None or args.externals_dir == 'None':
-                docker_cmd = {'test_name': test,
-                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
-                                            '--name', test_name,
-                                            '-v', build_mount,
-                                            '-v', results_mount,
-                                            '-v', cgroup_mount,
-                                            '-h', 'icat.example.org',
-                                            args.image_name],
-                              'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
-                                            '--database_type', args.database_type,
-                                            '--test_name', test],
-                              'stop_cmd': ['docker', 'stop', test_name]}
-            else:
-                docker_cmd = {'test_name': test,
-                              'run_cmd': ['docker', 'run', '-d', '--rm', '--privileged',
-                                            '--name', test_name,
-                                            '-v', build_mount,
-                                            '-v', results_mount,
-                                            '-v', cgroup_mount,
-                                            '-v', externals_mount,
-                                            '-h', 'icat.example.org',
-                                            args.image_name],
-                              'exec_cmd': ['docker', 'exec', test_name, 'python', 'install_and_test.py',
-                                            '--database_type', args.database_type,
-                                            '--test_name', test, '--install_externals'],
-                              'stop_cmd': ['docker', 'stop', test_name]}
+            print('OS not supported')
 
         docker_cmds_list.append(docker_cmd)
     

@@ -13,9 +13,9 @@ from subprocess import Popen, PIPE
 
 def run_tests(test_type, specific_test, federation_args):
     test_type_dict = {
-        'topology_icat': '--run_python_suite --include_auth_tests --topology_test=icat',
-        'topology_resource': '--run_python_suite --include_auth_tests --topology_test=resource',
-        'federation': '--run_specific_test test_federation --federation {0}'.format(' '.join(federation_args))
+        'topology_icat': '--run_python_suite --topology_test=icat',
+        'topology_resource': '--run_python_suite --topology_test=resource',
+        'federation': '--run_specific_test test_federation --federation {0}'.format(federation_args)
     }
 
     if specific_test is None or specific_test == 'None':
@@ -26,7 +26,7 @@ def run_tests(test_type, specific_test, federation_args):
         elif test_type == 'topology_resource':
             test_type_argument = '--run_specific_test=' + specific_test + ' --topology_test=resource'
         else:
-            test_type_argument = '--run_specific_test=' + specific_test + ' --federation {0}'.format(' '.join(federation_args))
+            test_type_argument = '--run_specific_test=' + specific_test + ' --federation {0}'.format(federation_args)
 
     if test_type == 'federation':
         irods_version = irods_python_ci_utilities.get_irods_version()
@@ -51,7 +51,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run topology/federation tests from Jenkins')
     parser.add_argument('--test_type', type=str, required=True, choices=['topology_icat', 'topology_resource', 'federation'])
     parser.add_argument('--specific_test', type=str, default=None)
-    parser.add_argument('--federation_args', type=str, nargs=3, default='None')
+    parser.add_argument('--federation_args', type=str, default=None)
 
     args = parser.parse_args()
 

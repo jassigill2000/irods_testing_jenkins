@@ -6,6 +6,7 @@ import subprocess
 import platform
 import sys
 import json
+import time
 
 if sys.version_info < (3, 0):
     from urlparse import urlparse
@@ -209,10 +210,14 @@ def get_munge_external():
     munge_external = 'irods-externals-mungefs*'
     return munge_external
 
-def install_irods_packages(database_type, install_externals, irods_packages_directory, externals_directory=None, upgrade=False):
-    if not upgrade:
-        install_database = 'python install_database.py --database_type {0}'.format(database_type)
-        subprocess.check_call(install_database, shell=True)
+def install_irods_packages(database_type, install_externals, irods_packages_directory, externals_directory=None, upgrade=False, is_provider=False):
+    install_database = 'python install_database.py --database_type {0}'.format(database_type)
+    if upgrade:
+        #don't install the database
+        pass
+    else:
+        if is_provider:
+            subprocess.check_call(install_database, shell=True)
 
     if get_distribution() == 'Centos linux':
         subprocess_get_output(['rpm', '--rebuilddb'], check_rc=True)
@@ -243,6 +248,26 @@ def get_database_plugin(irods_packages_directory, database_type):
     database_plugin_basename = filter(lambda x:package_filter in x, os.listdir(irods_packages_directory))[0]
     database_plugin = os.path.join(irods_packages_directory, database_plugin_basename)
     return database_plugin
+
+def setup_irods(database_type, database_machine=None):
+    if database_type == 'postgres':
+        subprocess.check_call(['python /var/lib/irods/scripts/setup_irods.py < /var/lib/irods/packaging/localhost_setup_postgres.input'], shell=True)
+    elif database_type == 'mysql':
+        subprocess.check_call(['python /var/lib/irods/scripts/setup_irods.py < /var/lib/irods/packaging/localhost_setup_mysql.input'], shell=True)
+    elif database_type == 'oracle':
+        status = 'running'
+        while status == 'running':
+            status_cmd = ['docker', 'inspect', '--format', '{{.State.Health.Status}}', database_machine]
+            status_proc = Popen(status_cmd, stdout = PIPE, stderr=PIPE)
+            _out, _err = status_proc.communicate()
+            if 'healthy' in _out:
+                status = _out
+
+            time.sleep(1)
+
+        subprocess.check_call(['export LD_LIBRARY_PATH=/usr/lib/oracle/11.2/client64/lib:$LD_LIBRARY_PATH; export ORACLE_HOME=/usr/lib/oracle/11.2/client64; export PATH=$ORACLE_HOME/bin:$PATH; python /var/lib/irods/scripts/setup_irods.py < /var/lib/irods/packaging/localhost_setup_oracle.input'], shell=True)
+    else:
+        print(database_type, ' not supported')
 
 def upgrade(upgrade_packages_directory, database_type, install_externals, externals_directory):
     initial_version = get_irods_version()
@@ -312,14 +337,14 @@ stderr: {4}
 '''.format(args, kwargs, p.returncode, out, err))
     return p.returncode, out, err
 
-def create_topo_network(network_name):
+def create_network(network_name):
     check_network = Popen(['docker', 'network', 'ls'], stdout=PIPE, stderr=PIPE)
     _out, _err = check_network.communicate()
     if not network_name in _out:
         docker_cmd = ['docker', 'network', 'create', '--attachable', network_name]
         network = subprocess.check_call(docker_cmd)
 
-def delete_topo_network(network_name):
+def delete_network(network_name):
     delete = False
     while not delete:
         rm_network = Popen(['docker', 'network', 'rm', network_name], stdout=PIPE, stderr=PIPE)
@@ -328,3 +353,14 @@ def delete_topo_network(network_name):
             time.sleep(1)
         else:
             delete = True
+
+def is_container_running(container_name):
+    _running = False
+    state_cmd = ['docker', 'inspect', '-f', '{{.State.Running}}', container_name]
+    while not _running:
+        state_proc = Popen(state_cmd, stdout=PIPE, stderr=PIPE)
+        _sout, _serr = state_proc.communicate()
+        if 'true' in _sout:
+            _running = True
+        time.sleep(1)
+    return _running

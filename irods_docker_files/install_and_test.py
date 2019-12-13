@@ -112,7 +112,7 @@ def main():
 
     args = parser.parse_args()
 
-    ci_utilities.install_irods_packages(args.database_type, args.install_externals, get_irods_packages_directory(), get_externals_directory())
+    ci_utilities.install_irods_packages(args.database_type, args.install_externals, get_irods_packages_directory(), get_externals_directory(), is_provider=True)
 
     setup_irods(args.database_type, args.database_machine)
 

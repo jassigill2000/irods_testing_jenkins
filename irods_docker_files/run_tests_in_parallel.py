@@ -97,9 +97,7 @@ def to_docker_commands(test_list, cmd_line_args, is_unit_test=False):
         upgrade_packages_dir = cmd_line_args.upgrade_packages_dir
     upgrade_mount = upgrade_packages_dir + ':/upgrade_dir'
     results_mount = cmd_line_args.jenkins_output + '/' + cmd_line_args.database_type + ':/irods_test_env'
-    cgroup_mount = '/sys/fs/cgroup:/sys/fs/cgroup:ro'
     run_mount = '/tmp/$(mktemp -d):/run'
-    docker_socket = '/var/run/docker.sock:/var/run/docker.sock'
     externals_mount = cmd_line_args.externals_dir + ':/irods_externals'
     mysql_mount = '/projects/irods/vsphere-testing/externals/mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit.tar.gz:/projects/irods/vsphere-testing/externals/mysql-connector-odbc-5.3.7-linux-ubuntu16.04-x86-64bit.tar.gz'
 
@@ -113,14 +111,14 @@ def to_docker_commands(test_list, cmd_line_args, is_unit_test=False):
 
         if 'centos' in cmd_line_args.image_name:
             centosCmdBuilder = DockerCommandsBuilder()
-            centosCmdBuilder.core_constructor(container_name, build_mount, upgrade_mount, results_mount, cgroup_mount, None, externals_mount, None, cmd_line_args.image_name, 'install_and_test.py', cmd_line_args.database_type, test, is_unit_test, database_container, docker_socket)
+            centosCmdBuilder.core_constructor(container_name, build_mount, upgrade_mount, results_mount, None, externals_mount, None, cmd_line_args.image_name, 'install_and_test.py', cmd_line_args.database_type, test, 'standalone_icat', is_unit_test, True, database_container)
             run_cmd = centosCmdBuilder.build_run_cmd()
             exec_cmd = centosCmdBuilder.build_exec_cmd()
             stop_cmd = centosCmdBuilder.build_stop_cmd()
             docker_cmd = get_docker_cmd(test, run_cmd, exec_cmd, stop_cmd, container_name, database_container, network_name)
         elif 'ubuntu' in cmd_line_args.image_name:
             ubuntuCmdBuilder = DockerCommandsBuilder()
-            ubuntuCmdBuilder.core_constructor(container_name, build_mount, upgrade_mount, results_mount, cgroup_mount, None, externals_mount, mysql_mount, cmd_line_args.image_name, 'install_and_test.py', cmd_line_args.database_type, test, is_unit_test, database_container, docker_socket)
+            ubuntuCmdBuilder.core_constructor(container_name, build_mount, upgrade_mount, results_mount, None, externals_mount, mysql_mount, cmd_line_args.image_name, 'install_and_test.py', cmd_line_args.database_type, test, 'standalone_icat', is_unit_test, True, database_container)
 
             run_cmd = ubuntuCmdBuilder.build_run_cmd()
             exec_cmd = ubuntuCmdBuilder.build_exec_cmd()
